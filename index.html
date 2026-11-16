@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hoạt động 1: Lái xe An toàn - Nhận diện Hình phẳng & Biển báo Giao thông</title>
+<style>
+  :root {
+    --primary: #2563eb;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --warning: #f59e0b;
+    --dark: #0f172a;
+  }
+  * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+  body {
+    margin: 0; padding: 0;
+    background: linear-gradient(180deg, #bae6fd 0%, #eff6ff 100%);
+    min-height: 100vh; color: var(--dark);
+  }
+  header {
+    background: linear-gradient(90deg, #1e40af, #2563eb);
+    color: white; padding: 14px 20px; text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  header h1 { margin: 0; font-size: 1.5rem; }
+  header p { margin: 5px 0 0; font-size: 0.95rem; opacity: 0.92; }
+
+  .container {
+    max-width: 1050px; margin: 14px auto 32px; padding: 0 16px;
+  }
+
+  /* Thanh thông tin hành trình */
+  .hud-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
+    background: white; padding: 12px 18px; border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .hud-item {
+    font-weight: 700; font-size: 1rem; display: flex; align-items: center; gap: 8px;
+  }
+  .status-pill {
+    padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: 0.95rem;
+    background: #dcfce7; color: #166534;
+  }
+  .status-pill.stopped {
+    background: #fef3c7; color: #b45309; animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+
+  /* Thanh tiến trình các trạm */
+  .progress-track {
+    display: flex; justify-content: space-between; align-items: center;
+    background: white; padding: 12px 20px; border-radius: 14px;
+    margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    position: relative;
+  }
+  .step-dot {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #e2e8f0; color: #475569; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    border: 3px solid #cbd5e1; z-index: 2; transition: 0.3s;
+  }
+  .step-dot.active {
+    background: #f59e0b; color: white; border-color: #b45309; transform: scale(1.15);
+  }
+  .step-dot.done {
+    background: #16a34a; color: white; border-color: #15803d;
+  }
+
+  /* Khung cảnh đường phố nơi xe chạy */
+  .road-viewport {
+    position: relative; width: 100%; height: 270px;
+    border-radius: 20px; overflow: hidden;
+    border: 4px solid #334155;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+    background: linear-gradient(180deg, #7dd3fc 0%, #bae6fd 52%, #86efac 52%, #4ade80 68%, #475569 68%, #334155 100%);
+  }
+
+  /* Đám mây trôi */
+  .clouds {
+    position: absolute; top: 16px; left: 0; width: 200%; height: 60px;
+    display: flex; justify-content: space-around;
+    animation: moveClouds 18s linear infinite;
+  }
+  .paused .clouds, .paused .trees-strip, .paused .road-lines {
+    animation-play-state: paused !important;
+  }
+  @keyframes moveClouds {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* Hàng cây bên đường */
+  .trees-strip {
+    position: absolute; top: 78px; left: 0; width: 200%; height: 70px;
+    display: flex; justify-content: space-around; align-items: flex-end;
+    animation: moveRoad 3.2s linear infinite;
+  }
+
+  /* Vạch kẻ đường trắng đứt nét */
+  .road-lines {
+    position: absolute; bottom: 38px; left: 0; width: 200%; height: 10px;
+    background: repeating-linear-gradient(90deg, #ffffff 0px, #ffffff 55px, transparent 55px, transparent 110px);
+    animation: moveRoad 1.1s linear infinite;
+  }
+  @keyframes moveRoad {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* Biển báo bên đường trượt tới gần xe */
+  .roadside-sign {
+    position: absolute; top: 58px; right: -150px;
+    width: 110px; height: 145px;
+    transition: right 2.2s ease-out;
+    z-index: 5; text-align: center;
+  }
+  .roadside-sign.at-car {
+    right: 540px;
+  }
+  .roadside-sign.passed {
+    right: 1100px; transition: right 1.4s ease-in;
+  }
+  @media (max-width: 768px) {
+    .roadside-sign.at-car { right: 180px; }
+  }
+
+  /* Chiếc xe ô tô của học sinh */
+  .player-car {
+    position: absolute; bottom: 18px; left: 90px;
+    width: 190px; height: 95px; z-index: 6;
+    transition: transform 0.3s;
+  }
+  .driving-bounce {
+    animation: carBounce 0.45s ease-in-out infinite alternate;
+  }
+  @keyframes carBounce {
+    from { transform: translateY(0px); }
+    to { transform: translateY(-3px); }
+  }
+  .wheel-spin {
+    transform-box: fill-box; transform-origin: center;
+    animation: spinWheel 0.6s linear infinite;
+  }
+  .paused .wheel-spin { animation-play-state: paused !important; }
+  @keyframes spinWheel {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Khung câu hỏi khi gặp biển báo */
+  .question-panel {
+    margin-top: 18px; background: white; border-radius: 20px;
+    padding: 22px; box-shadow: 0 10px 28px rgba(0,0,0,0.1);
+    border: 3px solid #3b82f6; display: none;
+  }
+  .question-panel.show {
+    display: grid; grid-template-columns: 230px 1fr; gap: 22px; align-items: center;
+    animation: popUp 0.35s ease;
+  }
+  @media (max-width: 768px) {
+    .question-panel.show { grid-template-columns: 1fr; }
+  }
+  @keyframes popUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .sign-preview-box {
+    background: #f8fafc; border: 2px dashed #94a3b8; border-radius: 16px;
+    padding: 16px; text-align: center;
+  }
+  .sign-preview-box svg { width: 135px; height: 135px; }
+  .sign-badge {
+    display: inline-block; margin-top: 8px; padding: 4px 12px;
+    background: #dbeafe; color: #1e40af; border-radius: 999px;
+    font-weight: 700; font-size: 0.88rem;
+  }
+
+  .q-block {
+    margin-bottom: 16px; padding-bottom: 14px; border-bottom: 2px solid #f1f5f9;
+  }
+  .q-block:last-of-type { border-bottom: none; margin-bottom: 8px; }
+  .q-title {
+    font-weight: 800; font-size: 1.08rem; color: #0f172a; margin-bottom: 10px;
+  }
+  .options-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 10px;
+  }
+  .opt-btn {
+    padding: 11px 14px; border-radius: 12px; border: 2px solid #cbd5e1;
+    background: #f8fafc; font-weight: 700; font-size: 0.96rem;
+    cursor: pointer; text-align: left; transition: 0.2s; color: #1e293b;
+  }
+  .opt-btn:hover:not(:disabled) {
+    border-color: var(--primary); background: #eff6ff; transform: translateY(-2px);
+  }
+  .opt-btn.correct {
+    background: #dcfce7 !important; border-color: var(--success) !important; color: #166534 !important;
+  }
+  .opt-btn.wrong {
+    background: #fee2e2 !important; border-color: var(--danger) !important; color: #991b1b !important;
+    animation: shake 0.35s ease;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+
+  .feedback-msg {
+    margin-top: 10px; padding: 12px 16px; border-radius: 12px;
+    font-weight: 700; font-size: 1rem; display: none;
+  }
+  .continue-btn {
+    margin-top: 12px; padding: 12px 24px; border: none; border-radius: 12px;
+    background: var(--success); color: white; font-weight: 800; font-size: 1.05rem;
+    cursor: pointer; display: none; box-shadow: 0 4px 12px rgba(22,163,74,0.35);
+  }
+  .continue-btn:hover { background: #15803d; }
+
+  /* Màn hình chiến thắng cuối hành trình */
+  .victory-card {
+    display: none; background: white; border-radius: 20px; padding: 28px;
+    text-align: center; margin-top: 18px; border: 3px solid var(--success);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.1);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚗 HOẠT ĐỘNG 1: EM LÁI XE AN TOÀN – NHẬN DIỆN HÌNH PHẲNG & BIỂN BÁO BÊN ĐƯỜNG</h1>
+  <p>Bài 7: Hình vuông, hình tròn, hình tam giác, hình chữ nhật (SGK Toán Tiểu học - Trang 46–47)</p>
+</header>
+
+<div class="container">
+  <!-- Thanh trạng thái HUD -->
+  <div class="hud-bar">
+    <div class="hud-item">
+      <span>🚦 Trạng thái xe:</span>
+      <span id="carStatus" class="status-pill">🚗 Xe đang chạy trên đường...</span>
+    </div>
+    <div class="hud-item">
+      <span>📍 Trạm biển báo: <b id="stationNum">1 / 4</b></span>
+    </div>
+    <div class="hud-item" style="color:#b45309;">
+      <span>⭐ Điểm thưởng: <b id="scoreVal">0</b></span>
+    </div>
+  </div>
+
+  <!-- Tiến trình 4 trạm biển báo -->
+  <div class="progress-track" id="progressTrack">
+    <div class="step-dot active">1</div>
+    <div class="step-dot">2</div>
+    <div class="step-dot">3</div>
+    <div class="step-dot">4</div>
+  </div>
+
+  <!-- Khung cảnh lái xe -->
+  <div class="road-viewport" id="roadViewport">
+    <!-- Mây trời -->
+    <div class="clouds">
+      <svg width="90" height="45" viewBox="0 0 90 45"><ellipse cx="45" cy="25" rx="35" ry="15" fill="white" opacity="0.9"/><ellipse cx="30" cy="20" rx="20" ry="14" fill="white"/></svg>
+      <svg width="110" height="50" viewBox="0 0 110 50"><ellipse cx="55" cy="28" rx="42" ry="16" fill="white" opacity="0.85"/><ellipse cx="70" cy="20" rx="22" ry="14" fill="white"/></svg>
+      <svg width="90" height="45" viewBox="0 0 90 45"><ellipse cx="45" cy="25" rx="35" ry="15" fill="white" opacity="0.9"/></svg>
+      <svg width="110" height="50" viewBox="0 0 110 50"><ellipse cx="55" cy="28" rx="42" ry="16" fill="white" opacity="0.85"/></svg>
+    </div>
+
+    <!-- Hàng cây xanh bên đường -->
+    <div class="trees-strip">
+      <svg width="60" height="70" viewBox="0 0 60 70"><rect x="25" y="45" width="10" height="25" fill="#78350f"/><circle cx="30" cy="30" r="22" fill="#15803d"/><circle cx="20" cy="35" r="14" fill="#16a34a"/></svg>
+      <svg width="60" height="70" viewBox="0 0 60 70"><rect x="25" y="45" width="10" height="25" fill="#78350f"/><polygon points="30,5 55,50 5,50" fill="#15803d"/></svg>
+      <svg width="60" height="70" viewBox="0 0 60 70"><rect x="25" y="45" width="10" height="25" fill="#78350f"/><circle cx="30" cy="30" r="22" fill="#16a34a"/></svg>
+      <svg width="60" height="70" viewBox="0 0 60 70"><rect x="25" y="45" width="10" height="25" fill="#78350f"/><polygon points="30,5 55,50 5,50" fill="#15803d"/></svg>
+      <svg width="60" height="70" viewBox="0 0 60 70"><rect x="25" y="45" width="10" height="25" fill="#78350f"/><circle cx="30" cy="30" r="22" fill="#15803d"/></svg>
+      <svg width="60" height="70" viewBox="0 0 60 70"><rect x="25" y="45" width="10" height="25" fill="#78350f"/><polygon points="30,5 55,50 5,50" fill="#16a34a"/></svg>
+    </div>
+
+    <!-- Vạch kẻ đường -->
+    <div class="road-lines"></div>
+
+    <!-- Biển báo bên đường xuất hiện động -->
+    <div class="roadside-sign" id="roadsideSign">
+      <div id="roadsideSignSvg"></div>
+    </div>
+
+    <!-- Xe ô tô của học sinh -->
+    <div class="player-car driving-bounce" id="playerCar">
+      <svg viewBox="0 0 200 100" width="100%" height="100%">
+        <!-- Thân xe buýt trường học / ô tô con -->
+        <rect x="15" y="38" width="165" height="40" rx="12" fill="#f59e0b" stroke="#b45309" stroke-width="3"/>
+        <path d="M 45,38 L 65,12 L 135,12 L 158,38 Z" fill="#fde047" stroke="#b45309" stroke-width="3"/>
+        <!-- Cửa sổ xe -->
+        <polygon points="52,35 68,16 98,16 98,35" fill="#bae6fd" stroke="#0284c7" stroke-width="2"/>
+        <polygon points="104,35 104,16 132,16 150,35" fill="#bae6fd" stroke="#0284c7" stroke-width="2"/>
+        <!-- Tài xế nhí -->
+        <circle cx="122" cy="26" r="7" fill="#fed7aa"/>
+        <!-- Đèn pha trước -->
+        <ellipse cx="178" cy="52" rx="5" ry="8" fill="#fef08a" stroke="#ca8a04" stroke-width="2"/>
+        <!-- Hai bánh xe quay tròn -->
+        <g class="wheel-spin">
+          <circle cx="55" cy="78" r="17" fill="#1e293b" stroke="#94a3b8" stroke-width="3"/>
+          <circle cx="55" cy="78" r="7" fill="#e2e8f0"/>
+          <line x1="55" y1="61" x2="55" y2="95" stroke="#94a3b8" stroke-width="2"/>
+          <line x1="38" y1="78" x2="72" y2="78" stroke="#94a3b8" stroke-width="2"/>
+        </g>
+        <g class="wheel-spin">
+          <circle cx="142" cy="78" r="17" fill="#1e293b" stroke="#94a3b8" stroke-width="3"/>
+          <circle cx="142" cy="78" r="7" fill="#e2e8f0"/>
+          <line x1="142" y1="61" x2="142" y2="95" stroke="#94a3b8" stroke-width="2"/>
+          <line x1="125" y1="78" x2="159" y2="78" stroke="#94a3b8" stroke-width="2"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Hộp câu hỏi hiện lên khi xe gặp biển báo -->
+  <div class="question-panel" id="questionPanel">
+    <div class="sign-preview-box">
+      <div id="modalSignSvg"></div>
+      <div class="sign-badge" id="modalStationBadge">Biển báo Trạm 1</div>
+      <p style="font-size:0.88rem; color:#475569; margin:8px 0 0;">Quan sát kỹ hình dạng và ký hiệu trên biển báo để trả lời 2 câu hỏi bên cạnh!</p>
+    </div>
+
+    <div>
+      <!-- Câu hỏi 1: Hình dạng -->
+      <div class="q-block">
+        <div class="q-title" id="q1Title">Câu 1 (Hình học): Biển báo bên đường này có dạng hình gì?</div>
+        <div class="options-grid" id="q1Options"></div>
+      </div>
+
+      <!-- Câu hỏi 2: Tên biển báo & Chức năng -->
+      <div class="q-block">
+        <div class="q-title" id="q2Title">Câu 2 (Giao thông): Tên biển báo và chức năng của biển báo này là gì?</div>
+        <div class="options-grid" id="q2Options"></div>
+      </div>
+
+      <div class="feedback-msg" id="stationFeedback"></div>
+      <button class="continue-btn" id="continueBtn" onclick="resumeDriving()">
+        🚗 Tuyệt vời! Cho xe tiếp tục chạy tới biển báo tiếp theo ➔
+      </button>
+    </div>
+  </div>
+
+  <!-- Màn hình hoàn thành toàn bộ chặng đường -->
+  <div class="victory-card" id="victoryCard">
+    <h2 style="color:#16a34a; font-size:1.8rem; margin-top:0;">🏆 CHÚC MỪNG TÀI XẾ NHÍ ĐÃ VỀ ĐÍCH AN TOÀN!</h2>
+    <p style="font-size:1.1rem; color:#334155; max-width:700px; margin:10px auto;">
+      Em đã vượt qua cả <b>4 trạm biển báo giao thông</b> và nhận diện chính xác 4 hình phẳng cơ bản: <b>Hình tam giác, Hình tròn, Hình vuông, Hình chữ nhật</b> (Bài 7 - Trang 46)!
+    </p>
+    <p style="font-size:1.25rem; font-weight:800; color:#b45309;">⭐ Tổng điểm đạt được: <span id="finalScore">0</span> điểm</p>
+    <button class="continue-btn" style="display:inline-block;" onclick="restartGame()">🔄 Lái xe lại từ đầu</button>
+  </div>
+</div>
+
+<script>
+  // Dữ liệu 4 Trạm Biển Báo bên đường bám sát SGK Bài 7 (trang 46)
+  const stations = [
+    {
+      id: 1,
+      badge: "Trạm 1 / 4 (Bài 7 - Trang 46)",
+      poleSvg: `<svg viewBox="0 0 100 140" width="100" height="140">
+        <rect x="46" y="70" width="8" height="70" fill="#64748b"/>
+        <polygon points="50,8 92,76 8,76" fill="#fde047" stroke="#dc2626" stroke-width="8" stroke-linejoin="round"/>
+        <circle cx="50" cy="36" r="5" fill="#0f172a"/>
+        <line x1="50" y1="41" x2="50" y2="56" stroke="#0f172a" stroke-width="4"/>
+        <line x1="50" y1="56" x2="42" y2="68" stroke="#0f172a" stroke-width="3.5"/>
+        <line x1="50" y1="56" x2="58" y2="68" stroke="#0f172a" stroke-width="3.5"/>
+        <line x1="32" y1="70" x2="68" y2="70" stroke="#0f172a" stroke-width="2" stroke-dasharray="4 3"/>
+      </svg>`,
+      q1: "1️⃣ Câu hỏi Hình học: Biển báo có viền đỏ, nền vàng bên đường có dạng HÌNH GÌ?",
+      q1Opts: ["Hình tam giác", "Hình tròn", "Hình vuông", "Hình chữ nhật"],
+      q1Ans: 0,
+      q2: "2️⃣ Câu hỏi Giao thông: Tên và chức năng của biển báo này là gì?",
+      q2Opts: [
+        "Biển báo nguy hiểm: Có người đi bộ cắt ngang (nhắc xe giảm tốc độ, nhường đường)",
+        "Biển báo cấm tất cả các xe ô tô đi qua",
+        "Biển chỉ dẫn khu vực đỗ xe buýt"
+      ],
+      q2Ans: 0,
+      hint: "💡 Gợi ý: Biển báo này có 3 cạnh, 3 góc nhọn (giống hình mẫu trong SGK trang 46) và vẽ hình người đang đi bộ qua đường!"
+    },
+    {
+      id: 2,
+      badge: "Trạm 2 / 4 (Bài 7 - Trang 46)",
+      poleSvg: `<svg viewBox="0 0 100 140" width="100" height="140">
+        <rect x="46" y="72" width="8" height="68" fill="#64748b"/>
+        <circle cx="50" cy="42" r="34" fill="#2563eb" stroke="#ffffff" stroke-width="4"/>
+        <circle cx="50" cy="42" r="18" fill="none" stroke="#ffffff" stroke-width="4" stroke-dasharray="18 8"/>
+        <polygon points="50,18 58,24 50,30" fill="#ffffff"/>
+      </svg>`,
+      q1: "1️⃣ Câu hỏi Hình học: Biển báo màu xanh dương vừa xuất hiện bên đường có dạng HÌNH GÌ?",
+      q1Opts: ["Hình vuông", "Hình tròn", "Hình tam giác", "Hình chữ nhật"],
+      q1Ans: 1,
+      q2: "2️⃣ Câu hỏi Giao thông: Tên và chức năng của biển báo màu xanh này là gì?",
+      q2Opts: [
+        "Biển báo nguy hiểm đường trơn trượt",
+        "Biển hiệu lệnh: Nơi giao nhau chạy theo vòng xuyến (báo các xe đi vòng theo đảo an toàn)",
+        "Biển báo cấm rẽ trái và rẽ phải"
+      ],
+      q2Ans: 1,
+      hint: "💡 Gợi ý: Đường viền của biển báo cong tròn đều không có góc cạnh, bên trong có mũi tên xoay vòng tròn!"
+    },
+    {
+      id: 3,
+      badge: "Trạm 3 / 4 (Bài 7 - Trang 46)",
+      poleSvg: `<svg viewBox="0 0 100 140" width="100" height="140">
+        <rect x="46" y="72" width="8" height="68" fill="#64748b"/>
+        <rect x="16" y="10" width="68" height="68" rx="4" fill="#2563eb" stroke="#ffffff" stroke-width="4"/>
+        <text x="50" y="60" text-anchor="middle" font-size="48" font-weight="bold" fill="#ffffff">P</text>
+      </svg>`,
+      q1: "1️⃣ Câu hỏi Hình học: Biển báo có chữ 'P' màu trắng bên đường có 4 cạnh bằng nhau là HÌNH GÌ?",
+      q1Opts: ["Hình tam giác", "Hình tròn", "Hình vuông", "Hình thang"],
+      q1Ans: 2,
+      q2: "2️⃣ Câu hỏi Giao thông: Tên và chức năng của biển báo chữ 'P' này là gì?",
+      q2Opts: [
+        "Biển chỉ dẫn: Nơi đỗ xe (chỉ dẫn khu vực được phép đỗ xe ô tô, xe máy an toàn)",
+        "Biển báo cấm bấm còi inh ỏi",
+        "Biển báo đường dành riêng cho tàu hỏa"
+      ],
+      q2Ans: 0,
+      hint: "💡 Gợi ý: Biển báo có 4 góc vuông và 4 cạnh dài bằng nhau là Hình vuông; chữ P (Parking) là nơi đỗ xe!"
+    },
+    {
+      id: 4,
+      badge: "Trạm 4 / 4 (Bài 7 - Trang 46)",
+      poleSvg: `<svg viewBox="0 0 100 140" width="100" height="140">
+        <rect x="46" y="68" width="8" height="72" fill="#64748b"/>
+        <rect x="6" y="18" width="88" height="52" rx="4" fill="#16a34a" stroke="#ffffff" stroke-width="4"/>
+        <text x="50" y="42" text-anchor="middle" font-size="13" font-weight="bold" fill="#ffffff">TRƯỜNG HỌC</text>
+        <text x="50" y="58" text-anchor="middle" font-size="12" font-weight="bold" fill="#fde047">500 m ➔</text>
+      </svg>`,
+      q1: "1️⃣ Câu hỏi Hình học: Biển báo chỉ dẫn màu xanh lá cây (có 2 cạnh dài bằng nhau, 2 cạnh ngắn bằng nhau) là HÌNH GÌ?",
+      q1Opts: ["Hình tròn", "Hình tam giác", "Hình vuông", "Hình chữ nhật"],
+      q1Ans: 3,
+      q2: "2️⃣ Câu hỏi Giao thông: Chức năng của biển báo chỉ dẫn này là gì?",
+      q2Opts: [
+        "Biển chỉ dẫn địa điểm và khoảng cách: Báo hiệu còn 500 m nữa là đến Trường học",
+        "Biển cấm học sinh đi bộ qua đường",
+        "Biển báo hết đoạn đường ưu tiên"
+      ],
+      q2Ans: 0,
+      hint: "💡 Gợi ý: Hình có 4 góc vuông nhưng chiều ngang dài hơn chiều cao là Hình chữ nhật!"
+    }
+  ];
+
+  let currentIdx = 0;
+  let score = 0;
+  let q1Solved = false;
+  let q2Solved = false;
+
+  // Hiệu ứng âm thanh Web Audio API
+  function playTone(freq, dur, type='sine') {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + dur);
+    } catch(e){}
+  }
+  function soundHorn() {
+    playTone(440, 0.12, 'triangle');
+    setTimeout(() => playTone(587, 0.22, 'triangle'), 130);
+  }
+  function soundError() {
+    playTone(210, 0.28, 'sawtooth');
+  }
+
+  function updateProgressDots() {
+    const dots = document.querySelectorAll('#progressTrack .step-dot');
+    dots.forEach((d, idx) => {
+      d.classList.remove('active', 'done');
+      if (idx < currentIdx) d.classList.add('done');
+      else if (idx === currentIdx) d.classList.add('active');
+    });
+    document.getElementById('stationNum').textContent = `${Math.min(currentIdx + 1, stations.length)} / ${stations.length}`;
+  }
+
+  // Cho xe chạy và đưa biển báo từ xa lại gần
+  function driveToNextSign() {
+    q1Solved = false;
+    q2Solved = false;
+    updateProgressDots();
+
+    const viewport = document.getElementById('roadViewport');
+    const signEl = document.getElementById('roadsideSign');
+    const statusEl = document.getElementById('carStatus');
+    const qPanel = document.getElementById('questionPanel');
+
+    qPanel.classList.remove('show');
+    viewport.classList.remove('paused');
+    statusEl.className = 'status-pill';
+    statusEl.textContent = '🚗 Xe đang chạy trên đường...';
+
+    const st = stations[currentIdx];
+    document.getElementById('roadsideSignSvg').innerHTML = st.poleSvg;
+
+    // Đặt biển báo ở bên phải ngoài màn hình rồi trượt vào
+    signEl.style.transition = 'none';
+    signEl.className = 'roadside-sign';
+    void signEl.offsetWidth; // force reflow
+    signEl.style.transition = 'right 2.1s ease-out';
+    signEl.classList.add('at-car');
+
+    // Sau 2.1 giây khi xe tới đúng vị trí biển báo -> Xe dừng lại và hiện câu hỏi
+    setTimeout(() => {
+      viewport.classList.add('paused');
+      statusEl.className = 'status-pill stopped';
+      statusEl.textContent = `🛑 Phía trước có Biển báo số ${st.id}! Hãy trả lời đúng để đi tiếp!`;
+      soundHorn();
+      showQuestionModal(st);
+    }, 2100);
+  }
+
+  function showQuestionModal(st) {
+    const qPanel = document.getElementById('questionPanel');
+    document.getElementById('modalSignSvg').innerHTML = st.poleSvg;
+    document.getElementById('modalStationBadge').textContent = st.badge;
+    document.getElementById('q1Title').textContent = st.q1;
+    document.getElementById('q2Title').textContent = st.q2;
+
+    const q1Container = document.getElementById('q1Options');
+    q1Container.innerHTML = '';
+    st.q1Opts.forEach((optText, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'opt-btn';
+      btn.textContent = optText;
+      btn.onclick = () => checkAnswer(1, idx, btn);
+      q1Container.appendChild(btn);
+    });
+
+    const q2Container = document.getElementById('q2Options');
+    q2Container.innerHTML = '';
+    st.q2Opts.forEach((optText, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'opt-btn';
+      btn.textContent = optText;
+      btn.onclick = () => checkAnswer(2, idx, btn);
+      q2Container.appendChild(btn);
+    });
+
+    const fb = document.getElementById('stationFeedback');
+    fb.style.display = 'none';
+    document.getElementById('continueBtn').style.display = 'none';
+
+    qPanel.classList.add('show');
+  }
+
+  function checkAnswer(qNum, chosenIdx, btnEl) {
+    const st = stations[currentIdx];
+    const isCorrect = (qNum === 1) ? (chosenIdx === st.q1Ans) : (chosenIdx === st.q2Ans);
+    const fb = document.getElementById('stationFeedback');
+    fb.style.display = 'block';
+
+    if (isCorrect) {
+      playTone(659, 0.18);
+      btnEl.classList.remove('wrong');
+      btnEl.classList.add('correct');
+
+      // Khóa các nút trong câu hỏi đó sau khi đã chọn đúng
+      const parentId = (qNum === 1) ? 'q1Options' : 'q2Options';
+      document.querySelectorAll(`#${parentId} .opt-btn`).forEach(b => b.disabled = true);
+
+      if (qNum === 1) q1Solved = true;
+      if (qNum === 2) q2Solved = true;
+
+      score += 10;
+      document.getElementById('scoreVal').textContent = score;
+
+      if (q1Solved && q2Solved) {
+        soundHorn();
+        fb.style.background = '#dcfce7';
+        fb.style.color = '#166534';
+        fb.innerHTML = '🎉 <b>Chính xác cả 2 câu hỏi!</b> Đèn xanh đã bật, em hãy bấm nút bên dưới để xe tiếp tục lăn bánh nhé!';
+        document.getElementById('continueBtn').style.display = 'inline-block';
+      } else {
+        fb.style.background = '#e0f2fe';
+        fb.style.color = '#0369a1';
+        fb.innerHTML = `👍 Đúng Câu ${qNum} rồi (+10 điểm)! Bây giờ em hãy trả lời nốt câu hỏi còn lại để xe được đi tiếp nhé!`;
+      }
+    } else {
+      // Trả lời sai -> Báo lỗi, gợi ý và yêu cầu chọn lại
+      soundError();
+      btnEl.classList.add('wrong');
+      setTimeout(() => btnEl.classList.remove('wrong'), 600);
+      fb.style.background = '#fee2e2';
+      fb.style.color = '#991b1b';
+      fb.innerHTML = `❌ <b>Chưa chính xác! Xe chưa thể lăn bánh!</b> Em hãy quan sát lại biển báo và chọn lại đáp án đúng nhé.<br>${st.hint}`;
+    }
+  }
+
+  function resumeDriving() {
+    const signEl = document.getElementById('roadsideSign');
+    signEl.classList.remove('at-car');
+    signEl.classList.add('passed');
+
+    currentIdx++;
+    if (currentIdx < stations.length) {
+      driveToNextSign();
+    } else {
+      // Hoàn thành cả 4 trạm
+      document.getElementById('questionPanel').classList.remove('show');
+      document.getElementById('roadViewport').classList.add('paused');
+      const statusEl = document.getElementById('carStatus');
+      statusEl.className = 'status-pill';
+      statusEl.textContent = '🏁 Đã về đích an toàn tại Trường Tiểu học!';
+      document.querySelectorAll('#progressTrack .step-dot').forEach(d => d.className = 'step-dot done');
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('victoryCard').style.display = 'block';
+      soundHorn();
+    }
+  }
+
+  function restartGame() {
+    currentIdx = 0;
+    score = 0;
+    document.getElementById('scoreVal').textContent = '0';
+    document.getElementById('victoryCard').style.display = 'none';
+    driveToNextSign();
+  }
+
+  // Khởi động trò chơi ngay khi mở trang
+  window.onload = () => {
+    driveToNextSign();
+  };
+</script>
+</body>
+</html>
